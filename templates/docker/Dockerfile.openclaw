@@ -1,0 +1,54 @@
+FROM node:22-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3 python3-pip \
+    rsync curl xz-utils ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv (Python package manager)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
+    && ln -s /root/.local/bin/uv /usr/local/bin/uv \
+    && uv --version
+
+# Install pnpm globally
+RUN npm install -g pnpm
+
+# Install OpenClaw (AI agent gateway)
+RUN npm install -g openclaw@2026.2.9 \
+    && openclaw --version
+
+# Install mcporter for MCP server integration
+RUN npm install -g mcporter \
+    && mcporter --version
+
+# Create directories
+RUN mkdir -p /root/.openclaw \
+    && mkdir -p /root/.openclaw-templates \
+    && mkdir -p /root/clawd \
+    && mkdir -p /root/clawd/skills
+
+# Copy startup script
+COPY start-moltbot.sh /usr/local/bin/start-moltbot.sh
+RUN chmod +x /usr/local/bin/start-moltbot.sh
+
+# Copy default configuration template
+COPY moltbot.json.template /root/.openclaw-templates/moltbot.json.template
+
+# Copy custom skills (if any)
+COPY skills/ /root/clawd/skills/
+
+# Copy mcporter config (if exists)
+COPY config/mcporter.json /root/.config/mcporter/config.json
+
+# Set working directory
+WORKDIR /root/clawd
+
+# Expose the gateway port
+EXPOSE 18789
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=5 --start-period=60s \
+    CMD curl -sf http://localhost:18789/health || exit 1
+
+CMD ["start-moltbot.sh"]
